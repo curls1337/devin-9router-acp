@@ -1,0 +1,19 @@
+# Environment variables (keep secrets private)
+.env
+
+# Debug & runtime logs
+acp_debug.log
+*.log
+
+# Node dependencies & caches
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Devin attachments created at runtime
+.devin_attachments/

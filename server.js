@@ -63,7 +63,8 @@ const CONFIG = {
     'NEVER tell the user "Saya tidak dapat langsung menginstal atau menjalankan perintah di mesin lokal Anda" or act like a read-only chatbot! ' +
     'When the user asks you to install packages, setup dependencies, run migrations, docker, build, or start services, you MUST directly invoke `execute_command` to execute the commands and do the installation for them! ' +
     'You are fully capable of understanding images and diagrams attached in the conversation. ' +
-    'Always inspect the workspace files and read relevant documents when the user asks questions about their project.'
+    'Always inspect the workspace files and read relevant documents when the user asks questions about their project. ' +
+    'WORKFLOW EFFICIENCY: Be decisive and structured. Inspect primary files and directory structures first before doing deep searches. Avoid endless fragmented trial-and-error tool calls. Provide clear milestone explanations.'
 };
 
 // Log file for troubleshooting
@@ -391,6 +392,52 @@ function resolveToolName(rawName) {
     }
   }
   return rawName;
+}
+
+function formatToolCallTitle(funcName, args = {}) {
+  try {
+    switch (funcName) {
+      case 'execute_command': {
+        const cmd = args.command || args.cmd || '';
+        const shortCmd = cmd.length > 50 ? cmd.slice(0, 47) + '...' : cmd;
+        return shortCmd ? `Run: ${shortCmd}` : 'Run Command';
+      }
+      case 'read_file': {
+        const fp = args.path || args.file_path || args.filepath || '';
+        const base = path.basename(fp) || fp;
+        return base ? `Read ${base}` : 'Read File';
+      }
+      case 'write_file': {
+        const fp = args.path || args.file_path || args.filepath || '';
+        const base = path.basename(fp) || fp;
+        return base ? `Write ${base}` : 'Write File';
+      }
+      case 'edit_file': {
+        const fp = args.path || args.file_path || args.filepath || '';
+        const base = path.basename(fp) || fp;
+        return base ? `Edit ${base}` : 'Edit File';
+      }
+      case 'search_files': {
+        const q = args.query || args.pattern || args.term || '';
+        return q ? `Search "${q.length > 25 ? q.slice(0, 22) + '...' : q}"` : 'Search Files';
+      }
+      case 'find_files': {
+        const pat = args.pattern || args.glob || '';
+        return pat ? `Find "${pat}"` : 'Find Files';
+      }
+      case 'list_directory': {
+        const dir = args.path || args.dir_path || '.';
+        const base = path.basename(path.resolve(dir)) || dir;
+        return `List ${base === '.' ? 'workspace' : base}`;
+      }
+      default: {
+        const cleanName = funcName.replace(/^[a-zA-Z0-9_-]+__/, '');
+        return cleanName.replace(/_/g, ' ');
+      }
+    }
+  } catch (e) {
+    return funcName;
+  }
 }
 
 
@@ -1610,6 +1657,8 @@ rl.on('line', async (rawLine) => {
                 parsedArgs = { raw: tc.function.arguments };
               }
 
+              const friendlyTitle = formatToolCallTitle(funcName, parsedArgs);
+
               // Notify Devin UI of tool_call start
               send({
                 jsonrpc: '2.0',
@@ -1619,7 +1668,7 @@ rl.on('line', async (rawLine) => {
                   update: {
                     sessionUpdate: 'tool_call',
                     toolCallId: tc.id,
-                    title: `${funcName}(${JSON.stringify(parsedArgs)})`,
+                    title: friendlyTitle,
                     name: funcName,
                     status: 'in_progress',
                     rawInput: parsedArgs
@@ -1644,7 +1693,7 @@ rl.on('line', async (rawLine) => {
                   update: {
                     sessionUpdate: 'tool_call_update',
                     toolCallId: tc.id,
-                    title: `${funcName}`,
+                    title: friendlyTitle,
                     status: 'completed',
                     rawOutput: typeof result === 'string' && result.length > 5000 ? result.slice(0, 5000) + '... (truncated)' : result
                   }
